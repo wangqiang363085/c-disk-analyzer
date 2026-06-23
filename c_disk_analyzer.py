@@ -297,7 +297,8 @@ def gen_excel(data, path):
     ws_a.auto_filter.ref = f"A1:E{len(rows_a)+1}"
     ws_a.freeze_panes = "A2"
 
-
+    wb.save(path)
+    return path
 
 
 def main():
