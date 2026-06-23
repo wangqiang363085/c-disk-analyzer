@@ -70,7 +70,7 @@ def dir_size(path, timeout=30, depth=0):
 
 
 def scan():
-    data = {"total": 0, "used": 0, "free": 0, "folders": [], "appdata": []}
+    data = {"total": 0, "used": 0, "free": 0, "folders": [], "appdata": [], "caches": []}
 
     # 磁盘容量
     try:
@@ -119,6 +119,24 @@ def scan():
                 if sz and sz > 100e6:
                     data["appdata"].append({"name": item.name, "size": sz})
     data["appdata"].sort(key=lambda x: x["size"], reverse=True)
+
+    # 缓存目录
+    print("\n扫描缓存目录...")
+    cache_paths = [
+        ("用户临时文件", os.environ.get("TEMP", "")),
+        ("Windows 临时文件", os.environ.get("WINDIR", "") + "\\Temp"),
+        ("Windows 更新缓存", os.environ.get("WINDIR", "") + "\\SoftwareDistribution\\Download"),
+        ("npm 缓存", os.environ.get("APPDATA", "") + "\\npm-cache"),
+        ("pip 缓存", os.environ.get("LOCALAPPDATA", "") + "\\pip\\cache"),
+        ("浏览器缓存", os.environ.get("LOCALAPPDATA", "") + "\\Microsoft\\Windows\\INetCache"),
+    ]
+    for label, path in cache_paths:
+        if os.path.exists(path):
+            sz = dir_size(path, timeout=10, depth=2)
+            if sz and sz > 1024 * 1024:
+                data["caches"].append({"label": label, "size": sz})
+    data["caches"].sort(key=lambda x: x["size"], reverse=True)
+
     return data
 
 
@@ -259,69 +277,111 @@ def gen_excel(data, path):
     ws_d.auto_filter.ref = f"A1:E{len(rows_d)+1}"
     ws_d.freeze_panes = "A2"
 
-    # === Sheet 3: 清理建议 ===
+    # === Sheet 3: 清理建议（按可释放空间大小排序）===
     ws_c = wb.create_sheet("清理建议")
-    ws_c.column_dimensions['A'].width = 30
-    ws_c.column_dimensions['B'].width = 55
+    ws_c.column_dimensions['A'].width = 32
+    ws_c.column_dimensions['B'].width = 20
+    ws_c.column_dimensions['C'].width = 50
 
     row = 1
     ws_c.cell(row=row, column=1, value="清理建议").font = tf
-    ws_c.merge_cells("A1:B1")
+    ws_c.merge_cells("A1:C1")
 
+    # 一、能马上清理的 - 用 data["caches"] 实际扫描数据
     row = 3
     ws_c.cell(row=row, column=1, value="一、能马上清理的（安全）").font = stf
-    safe = [
-        ("npm 缓存", "命令行执行: npm cache clean --force"),
-        ("pip 缓存", "命令行执行: pip cache purge"),
-        ("用户临时文件", "Win+R > cleanmgr > 选C盘 > 清理系统文件 > 全选"),
-        ("Windows 更新缓存", "同上，cleanmgr 里包含此项"),
-    ]
-    for i, (name, action) in enumerate(safe):
-        r = row + 1 + i
-        ws_c.cell(row=r, column=1, value=f"  {name}").font = gf
-        ws_c.cell(row=r, column=2, value=action).font = df
+    headers_safe = ["项目", "可释放空间", "操作方法"]
+    for i, h in enumerate(headers_safe):
+        c = ws_c.cell(row=row+1, column=i+1, value=h)
+        c.font = Font(name="微软雅黑", bold=True, size=10)
+        c.border = bd
 
-    row = row + len(safe) + 2
-    ws_c.cell(row=row, column=1, value="二、需在软件内清理的缓存").font = stf
-    app_caches = [
-        ("剪映专业版", "打开剪映 > 设置 > 清理缓存"),
-        ("美图系列", "打开美图 > 设置 > 清理缓存"),
-        ("微信开发者工具", "工具 > 设置 > 清理缓存"),
-        ("WPS Office", "WPS > 设置 > 清理缓存"),
-        ("豆包", "豆包 > 设置 > 清理缓存"),
-        ("JetBrains IDE", "File > Invalidate Caches"),
-        ("飞书", "飞书 > 设置 > 清理缓存"),
-        ("钉钉", "钉钉 > 设置 > 清理缓存"),
-    ]
-    for i, (name, action) in enumerate(app_caches):
-        r = row + 1 + i
-        ws_c.cell(row=r, column=1, value=f"  {name}").font = Font(name="微软雅黑", size=10, bold=True, color="ED7D31")
-        ws_c.cell(row=r, column=2, value=action).font = df
+    row_data = row + 2
+    total_safe = 0
+    for cache in data["caches"]:
+        ws_c.cell(row=row_data, column=1, value=f"  {cache['label']}").font = df
+        ws_c.cell(row=row_data, column=2, value=fmt(cache['size'])).font = df
+        ws_c.cell(row=row_data, column=2).alignment = Alignment(horizontal='right')
+        ws_c.cell(row=row_data, column=3, value="cleanmgr 或手动删除").font = df
+        for ci in range(1, 4):
+            ws_c.cell(row=row_data, column=ci).border = bd
+        total_safe += cache["size"]
+        row_data += 1
 
-    row = row + len(app_caches) + 2
-    ws_c.cell(row=row, column=1, value="三、绝对不能碰的目录").font = stf
-    no_touch = [
-        "C:\\Windows — 系统核心，删了系统就崩",
-        "C:\\ProgramData — 程序运行数据，删了软件异常",
-        "C:\\Program Files — 通过设置卸载，不要手动删文件夹",
-        "pagefile.sys — 虚拟内存，系统自动管理",
-    ]
-    for i, item in enumerate(no_touch):
-        r = row + 1 + i
-        ws_c.cell(row=r, column=1, value=f"  {item}").font = rf
+    # 小计
+    ws_c.cell(row=row_data, column=1, value="  合计").font = Font(name="微软雅黑", size=10, bold=True)
+    ws_c.cell(row=row_data, column=2, value=fmt(total_safe)).font = Font(name="微软雅黑", size=10, bold=True, color="00B050")
+    for ci in range(1, 4):
+        ws_c.cell(row=row_data, column=ci).border = bd
 
-    row = row + len(no_touch) + 2
-    ws_c.cell(row=row, column=1, value="四、日后注意事项").font = stf
-    tips = [
-        "1. 剪映等视频软件做完视频后立即清理缓存",
-        "2. 大文件（视频、安装包）放到 D 盘或其他盘",
-        "3. 微信 / 钉钉关掉自动下载，定期清理聊天文件",
-        "4. 每月跑一次 cleanmgr，养成习惯",
-        "5. 终极方案：C 盘换大容量 SSD",
+    # 二、AppData 大缓存（需在软件内清理）
+    row = row_data + 2
+    ws_c.cell(row=row, column=1, value="二、需在软件内清理的缓存（按大小排序）").font = stf
+    headers_app = ["软件", "缓存大小", "清理方法"]
+    for i, h in enumerate(headers_app):
+        c = ws_c.cell(row=row+1, column=i+1, value=h)
+        c.font = Font(name="微软雅黑", bold=True, size=10)
+        c.border = bd
+
+    known_methods = {
+        "jianyingpro": "剪映 > 设置 > 清理缓存",
+        "meituapp": "美图 > 设置 > 清理缓存",
+        "meitu": "美图 > 设置 > 清理缓存",
+        "wechat": "工具 > 设置 > 清理缓存",
+        "kingsoft": "WPS > 设置 > 清理缓存",
+        "doubao": "豆包 > 设置 > 清理缓存",
+        "jetbrains": "IDE: File > Invalidate Caches",
+        "feishu": "飞书 > 设置 > 清理缓存",
+        "google": "Chrome > 设置 > 清除数据",
+        "qianniu": "千牛 > 设置 > 清理缓存",
+        "dingtalk": "钉钉 > 设置 > 清理缓存",
+        "openai": "工具 > 设置 > 清理缓存",
+        "mozilla": "Firefox > 设置 > 清除数据",
+        "microsoft": "系统组件，不要动",
+        "pip": "pip cache purge",
+        "npm": "npm cache clean --force",
+    }
+
+    r = row + 2
+    total_app = 0
+    for a in data["appdata"]:
+        kl = a["name"].lower()
+        method = "软件设置里清理"
+        for key, m in known_methods.items():
+            if key in kl:
+                method = m
+                break
+        ws_c.cell(row=r, column=1, value=f"  {a['name']}").font = df
+        ws_c.cell(row=r, column=2, value=fmt(a["size"])).font = df
+        ws_c.cell(row=r, column=2).alignment = Alignment(horizontal='right')
+        ws_c.cell(row=r, column=3, value=method).font = df
+        for ci in range(1, 4):
+            ws_c.cell(row=r, column=ci).border = bd
+        total_app += a["size"]
+        r += 1
+
+    ws_c.cell(row=r, column=1, value="  合计").font = Font(name="微软雅黑", size=10, bold=True)
+    ws_c.cell(row=r, column=2, value=fmt(total_app)).font = Font(name="微软雅黑", size=10, bold=True, color="ED7D31")
+    for ci in range(1, 4):
+        ws_c.cell(row=r, column=ci).border = bd
+
+    # 总计
+    r += 2
+    ws_c.cell(row=r, column=1, value="总计可释放").font = Font(name="微软雅黑", size=11, bold=True, color="C00000")
+    ws_c.cell(row=r, column=2, value=fmt(total_safe + total_app)).font = Font(name="微软雅黑", size=11, bold=True, color="C00000")
+
+    # 三、注意事项
+    r += 2
+    ws_c.cell(row=r, column=1, value="三、注意事项").font = stf
+    notes = [
+        "C:\\Windows、C:\\ProgramData、C:\\Program Files 不要手动删",
+        "pagefile.sys 系统自动管理，不要动",
+        "剪映/美图等缓存清理需要打开软件操作",
+        "npm/pip 缓存可直接命令行清理",
+        "建议每月跑一次 cleanmgr 保持磁盘整洁",
     ]
-    for i, tip in enumerate(tips):
-        r = row + 1 + i
-        ws_c.cell(row=r, column=1, value=f"  {tip}").font = df
+    for i, note in enumerate(notes):
+        ws_c.cell(row=r+1+i, column=1, value=f"  {note}").font = df
 
     wb.save(path)
     return path
