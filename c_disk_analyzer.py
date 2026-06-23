@@ -259,43 +259,69 @@ def gen_excel(data, path):
     ws_d.auto_filter.ref = f"A1:E{len(rows_d)+1}"
     ws_d.freeze_panes = "A2"
 
-    # === Sheet 3: AppData缓存 ===
-    ws_a = wb.create_sheet("AppData缓存")
-    shdr(ws_a, ["软件", "类型", "大小", "能否删除", "建议"], [30, 22, 15, 12, 55])
-    known = {
-        "jianyingpro": ("剪映专业版", "视频缓存", "部分能", "剪映->设置->清缓存"),
-        "meituapp": ("美图", "图片缓存", "部分能", "美图->设置->清缓存"),
-        "meitu": ("美图", "图片缓存", "部分能", "美图->设置->清缓存"),
-        "wechat": ("微信开发者工具", "开发工具", "部分能", "工具->设置->清缓存"),
-        "kingsoft": ("WPS Office", "办公缓存", "部分能", "WPS->设置->清缓存"),
-        "doubao": ("豆包", "AI缓存", "部分能", "豆包->设置->清缓存"),
-        "microsoft": ("Microsoft", "系统组件", "不能", "系统相关不要动"),
-        "jetbrains": ("JetBrains IDE", "IDE缓存", "部分能", "File->Invalidate Caches"),
-        "feishu": ("飞书", "通讯缓存", "部分能", "飞书->设置->清缓存"),
-        "google": ("Google/Chrome", "浏览器", "部分能", "Chrome->设置->清数据"),
-        "qianniu": ("千牛", "卖家工具", "部分能", "千牛->设置->清缓存"),
-        "pip": ("pip缓存", "Python包", "能", "pip cache purge"),
-        "dingtalk": ("钉钉", "通讯缓存", "部分能", "钉钉->设置->清缓存"),
-        "openai": ("OpenAI", "AI工具", "部分能", "工具->设置->清缓存"),
-        "npm": ("npm缓存", "Node.js包", "能", "npm cache clean --force"),
-        "mozilla": ("Firefox", "浏览器", "部分能", "Firefox->设置->清数据"),
-    }
-    rows_a = []
-    for a in data["appdata"]:
-        kl = a["name"].lower()
-        mk = None
-        for k, (n, t, cd, act) in known.items():
-            if k in kl:
-                mk = (n, t, cd, act)
-                break
-        if mk:
-            rows_a.append([mk[0], mk[1], fmt(a["size"]), mk[2], mk[3]])
-        else:
-            rows_a.append([a["name"], "应用缓存", fmt(a["size"]), "部分能", "软件设置里清"])
-    for i, r in enumerate(rows_a, 2):
-        wr(ws_a, i, r, dc=4)
-    ws_a.auto_filter.ref = f"A1:E{len(rows_a)+1}"
-    ws_a.freeze_panes = "A2"
+    # === Sheet 3: 清理建议 ===
+    ws_c = wb.create_sheet("清理建议")
+    ws_c.column_dimensions['A'].width = 30
+    ws_c.column_dimensions['B'].width = 55
+
+    row = 1
+    ws_c.cell(row=row, column=1, value="清理建议").font = tf
+    ws_c.merge_cells("A1:B1")
+
+    row = 3
+    ws_c.cell(row=row, column=1, value="一、能马上清理的（安全）").font = stf
+    safe = [
+        ("npm 缓存", "命令行执行: npm cache clean --force"),
+        ("pip 缓存", "命令行执行: pip cache purge"),
+        ("用户临时文件", "Win+R > cleanmgr > 选C盘 > 清理系统文件 > 全选"),
+        ("Windows 更新缓存", "同上，cleanmgr 里包含此项"),
+    ]
+    for i, (name, action) in enumerate(safe):
+        r = row + 1 + i
+        ws_c.cell(row=r, column=1, value=f"  {name}").font = gf
+        ws_c.cell(row=r, column=2, value=action).font = df
+
+    row = row + len(safe) + 2
+    ws_c.cell(row=row, column=1, value="二、需在软件内清理的缓存").font = stf
+    app_caches = [
+        ("剪映专业版", "打开剪映 > 设置 > 清理缓存"),
+        ("美图系列", "打开美图 > 设置 > 清理缓存"),
+        ("微信开发者工具", "工具 > 设置 > 清理缓存"),
+        ("WPS Office", "WPS > 设置 > 清理缓存"),
+        ("豆包", "豆包 > 设置 > 清理缓存"),
+        ("JetBrains IDE", "File > Invalidate Caches"),
+        ("飞书", "飞书 > 设置 > 清理缓存"),
+        ("钉钉", "钉钉 > 设置 > 清理缓存"),
+    ]
+    for i, (name, action) in enumerate(app_caches):
+        r = row + 1 + i
+        ws_c.cell(row=r, column=1, value=f"  {name}").font = Font(name="微软雅黑", size=10, bold=True, color="ED7D31")
+        ws_c.cell(row=r, column=2, value=action).font = df
+
+    row = row + len(app_caches) + 2
+    ws_c.cell(row=row, column=1, value="三、绝对不能碰的目录").font = stf
+    no_touch = [
+        "C:\\Windows — 系统核心，删了系统就崩",
+        "C:\\ProgramData — 程序运行数据，删了软件异常",
+        "C:\\Program Files — 通过设置卸载，不要手动删文件夹",
+        "pagefile.sys — 虚拟内存，系统自动管理",
+    ]
+    for i, item in enumerate(no_touch):
+        r = row + 1 + i
+        ws_c.cell(row=r, column=1, value=f"  {item}").font = rf
+
+    row = row + len(no_touch) + 2
+    ws_c.cell(row=row, column=1, value="四、日后注意事项").font = stf
+    tips = [
+        "1. 剪映等视频软件做完视频后立即清理缓存",
+        "2. 大文件（视频、安装包）放到 D 盘或其他盘",
+        "3. 微信 / 钉钉关掉自动下载，定期清理聊天文件",
+        "4. 每月跑一次 cleanmgr，养成习惯",
+        "5. 终极方案：C 盘换大容量 SSD",
+    ]
+    for i, tip in enumerate(tips):
+        r = row + 1 + i
+        ws_c.cell(row=r, column=1, value=f"  {tip}").font = df
 
     wb.save(path)
     return path
