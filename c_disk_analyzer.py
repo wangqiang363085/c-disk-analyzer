@@ -172,71 +172,9 @@ def gen_excel(data, path):
                 else:
                     c.fill = yfill
 
-    # === Sheet 1: C盘目录总览 ===
-    ws1 = wb.active
-    ws1.title = "C盘目录总览"
-    shdr(ws1, ["目录路径", "说明", "大小", "能否删除", "备注"], [50, 22, 14, 12, 55])
-    rows = []
-    for f in data["folders"]:
-        n = f["name"].lower()
-        if "windows" in n:
-            cd, nt = "不能", "系统核心不要动"
-        elif "program files" in n:
-            cd, nt = "不能", "通过设置卸载勿手动删"
-        elif "programdata" in n:
-            cd, nt = "不能", "删了导致软件异常"
-        elif n == "users":
-            cd, nt = "视情况", "桌面/文档是个人文件"
-        elif n in ("tmp", "temp"):
-            cd, nt = "能", "临时文件安全可删"
-        else:
-            cd, nt = "视情况", "自行判断"
-        rows.append([f["name"], f["name"], fmt(f["size"]), cd, nt])
-    for i, r in enumerate(rows, 2):
-        wr(ws1, i, r, dc=4)
-    ws1.auto_filter.ref = f"A1:E{len(rows)+1}"
-    ws1.freeze_panes = "A2"
-
-    # === Sheet 2: AppData缓存 ===
-    ws2 = wb.create_sheet("AppData缓存")
-    shdr(ws2, ["软件", "类型", "大小", "能否删除", "建议"], [30, 22, 15, 12, 55])
-    known = {
-        "jianyingpro": ("剪映专业版", "视频缓存", "部分能", "剪映->设置->清缓存"),
-        "meituapp": ("美图", "图片缓存", "部分能", "美图->设置->清缓存"),
-        "meitu": ("美图", "图片缓存", "部分能", "美图->设置->清缓存"),
-        "wechat": ("微信开发者工具", "开发工具", "部分能", "工具->设置->清缓存"),
-        "kingsoft": ("WPS Office", "办公缓存", "部分能", "WPS->设置->清缓存"),
-        "doubao": ("豆包", "AI缓存", "部分能", "豆包->设置->清缓存"),
-        "microsoft": ("Microsoft", "系统组件", "不能", "系统相关不要动"),
-        "jetbrains": ("JetBrains IDE", "IDE缓存", "部分能", "File->Invalidate Caches"),
-        "feishu": ("飞书", "通讯缓存", "部分能", "飞书->设置->清缓存"),
-        "google": ("Google/Chrome", "浏览器", "部分能", "Chrome->设置->清数据"),
-        "qianniu": ("千牛", "卖家工具", "部分能", "千牛->设置->清缓存"),
-        "pip": ("pip缓存", "Python包", "能", "pip cache purge"),
-        "dingtalk": ("钉钉", "通讯缓存", "部分能", "钉钉->设置->清缓存"),
-        "openai": ("OpenAI", "AI工具", "部分能", "工具->设置->清缓存"),
-        "npm": ("npm缓存", "Node.js包", "能", "npm cache clean --force"),
-        "mozilla": ("Firefox", "浏览器", "部分能", "Firefox->设置->清数据"),
-    }
-    rows2 = []
-    for a in data["appdata"]:
-        kl = a["name"].lower()
-        mk = None
-        for k, (n, t, cd, act) in known.items():
-            if k in kl:
-                mk = (n, t, cd, act)
-                break
-        if mk:
-            rows2.append([mk[0], mk[1], fmt(a["size"]), mk[2], mk[3]])
-        else:
-            rows2.append([a["name"], "应用缓存", fmt(a["size"]), "部分能", "软件设置里清"])
-    for i, r in enumerate(rows2, 2):
-        wr(ws2, i, r, dc=4)
-    ws2.auto_filter.ref = f"A1:E{len(rows2)+1}"
-    ws2.freeze_panes = "A2"
-
-    # === Sheet 3: 空间总结 + 饼图 + 建议 ===
-    ws3 = wb.create_sheet("空间总结")
+    # === Sheet 1: 空间总结 + 饼图 + 建议（放在最前面）===
+    ws_s = wb.active
+    ws_s.title = "空间总结"
     fg = data["free"] / 1e9
     ug = data["used"] / 1e9
     tg = data["total"] / 1e9
@@ -264,15 +202,15 @@ def gen_excel(data, path):
 
     for ri, row in enumerate([["分类", "大小(GB)"]] + [[n, s] for n, s in cats], 1):
         for ci, v in enumerate(row, 1):
-            c = ws3.cell(row=ri, column=ci, value=v)
+            c = ws_s.cell(row=ri, column=ci, value=v)
             if ri == 1:
                 c.font = hf; c.fill = hfill
                 c.alignment = Alignment(horizontal='center', vertical='center')
                 c.border = bd
             else:
                 c.font = df; c.border = bd
-    ws3.column_dimensions['A'].width = 28
-    ws3.column_dimensions['B'].width = 15
+    ws_s.column_dimensions['A'].width = 28
+    ws_s.column_dimensions['B'].width = 15
 
     # 饼图
     pie = PieChart()
@@ -280,8 +218,8 @@ def gen_excel(data, path):
     pie.style = 10
     pie.width = 22
     pie.height = 15
-    labels = Reference(ws3, min_col=1, min_row=2, max_row=len(cats) + 1)
-    dr = Reference(ws3, min_col=2, min_row=1, max_row=len(cats) + 1)
+    labels = Reference(ws_s, min_col=1, min_row=2, max_row=len(cats) + 1)
+    dr = Reference(ws_s, min_col=2, min_row=1, max_row=len(cats) + 1)
     pie.add_data(dr, titles_from_data=True)
     pie.set_categories(labels)
     pie.dataLabels = DataLabelList()
@@ -295,56 +233,56 @@ def gen_excel(data, path):
         pt = DataPoint(idx=i)
         pt.graphicalProperties.solidFill = c
         pie.series[0].data_points.append(pt)
-    ws3.add_chart(pie, "D1")
+    ws_s.add_chart(pie, "D1")
 
     # 清理建议
     rs = len(cats) + 4
-    ws3.merge_cells(f"A{rs}:B{rs}")
-    ws3.cell(row=rs, column=1, value="C盘空间清理建议").font = tf
+    ws_s.merge_cells(f"A{rs}:B{rs}")
+    ws_s.cell(row=rs, column=1, value="C盘空间清理建议").font = tf
 
     r = rs + 1
-    ws3.merge_cells(f"A{r}:B{r}")
-    ws3.cell(row=r, column=1, value="一、能马上清理的(安全)").font = stf
+    ws_s.merge_cells(f"A{r}:B{r}")
+    ws_s.cell(row=r, column=1, value="一、能马上清理的(安全)").font = stf
     for i, (n, a) in enumerate([
         ("npm缓存", "npm cache clean --force"),
         ("pip缓存", "pip cache purge"),
         ("临时文件", "Win+R->cleanmgr->C盘->清理系统文件")
     ], r + 1):
-        ws3.merge_cells(f"A{i}:B{i}")
-        ws3.cell(row=i, column=1, value=f"  [{i-r}] {n}").font = gf
-        ws3.merge_cells(f"C{i}:E{i}")
-        ws3.cell(row=i, column=3, value=a).font = Font(name="微软雅黑", size=10)
+        ws_s.merge_cells(f"A{i}:B{i}")
+        ws_s.cell(row=i, column=1, value=f"  [{i-r}] {n}").font = gf
+        ws_s.merge_cells(f"C{i}:E{i}")
+        ws_s.cell(row=i, column=3, value=a).font = Font(name="微软雅黑", size=10)
 
     r2 = r + 4
-    ws3.merge_cells(f"A{r2}:B{r2}")
-    ws3.cell(row=r2, column=1, value="二、需在软件内清理的缓存").font = stf
+    ws_s.merge_cells(f"A{r2}:B{r2}")
+    ws_s.cell(row=r2, column=1, value="二、需在软件内清理的缓存").font = stf
     big = [a for a in data["appdata"] if a["size"] > 0.5e9][:8]
     for i, a in enumerate(big, r2 + 1):
-        ws3.merge_cells(f"A{i}:B{i}")
-        ws3.cell(
+        ws_s.merge_cells(f"A{i}:B{i}")
+        ws_s.cell(
             row=i, column=1,
             value=f"  [{i-r2}] {a['name']}({fmt(a['size'])})"
         ).font = Font(name="微软雅黑", size=10, bold=True, color="ED7D31")
-        ws3.merge_cells(f"C{i}:E{i}")
-        ws3.cell(row=i, column=3, value="软件设置里清理").font = Font(
+        ws_s.merge_cells(f"C{i}:E{i}")
+        ws_s.cell(row=i, column=3, value="软件设置里清理").font = Font(
             name="微软雅黑", size=10
         )
 
     r3 = r2 + len(big) + 2
-    ws3.merge_cells(f"A{r3}:B{r3}")
-    ws3.cell(row=r3, column=1, value="三、绝对不能碰的目录").font = stf
+    ws_s.merge_cells(f"A{r3}:B{r3}")
+    ws_s.cell(row=r3, column=1, value="三、绝对不能碰的目录").font = stf
     for i, item in enumerate([
         "C:\\Windows系统核心",
         "C:\\ProgramData程序数据",
         "Program Files走设置卸载勿手动删",
         "pagefile.sys虚拟内存自动管理"
     ], r3 + 1):
-        ws3.merge_cells(f"A{i}:E{i}")
-        ws3.cell(row=i, column=1, value=f"  {item}").font = rf
+        ws_s.merge_cells(f"A{i}:E{i}")
+        ws_s.cell(row=i, column=1, value=f"  {item}").font = rf
 
     r4 = r3 + 6
-    ws3.merge_cells(f"A{r4}:B{r4}")
-    ws3.cell(row=r4, column=1, value="四、日后注意事项").font = stf
+    ws_s.merge_cells(f"A{r4}:B{r4}")
+    ws_s.cell(row=r4, column=1, value="四、日后注意事项").font = stf
     for i, tip in enumerate([
         "1. 剪映等视频软件做完后立即清理缓存",
         "2. 大文件放到D盘或其他盘",
@@ -352,13 +290,74 @@ def gen_excel(data, path):
         "4. 每月跑一次cleanmgr",
         "5. 终极方案:换大容量SSD"
     ], r4 + 1):
-        ws3.merge_cells(f"A{i}:E{i}")
-        ws3.cell(row=i, column=1, value=f"  {tip}").font = Font(
+        ws_s.merge_cells(f"A{i}:E{i}")
+        ws_s.cell(row=i, column=1, value=f"  {tip}").font = Font(
             name="微软雅黑", size=10
         )
 
-    wb.save(path)
-    return path
+    # === Sheet 2: C盘目录总览 ===
+    ws_d = wb.create_sheet("C盘目录总览")
+    shdr(ws_d, ["目录路径", "说明", "大小", "能否删除", "备注"], [50, 22, 14, 12, 55])
+    rows_d = []
+    for f in data["folders"]:
+        n = f["name"].lower()
+        if "windows" in n:
+            cd, nt = "不能", "系统核心不要动"
+        elif "program files" in n:
+            cd, nt = "不能", "通过设置卸载勿手动删"
+        elif "programdata" in n:
+            cd, nt = "不能", "删了导致软件异常"
+        elif n == "users":
+            cd, nt = "视情况", "桌面/文档是个人文件"
+        elif n in ("tmp", "temp"):
+            cd, nt = "能", "临时文件安全可删"
+        else:
+            cd, nt = "视情况", "自行判断"
+        rows_d.append([f["name"], f["name"], fmt(f["size"]), cd, nt])
+    for i, r in enumerate(rows_d, 2):
+        wr(ws_d, i, r, dc=4)
+    ws_d.auto_filter.ref = f"A1:E{len(rows_d)+1}"
+    ws_d.freeze_panes = "A2"
+
+    # === Sheet 3: AppData缓存 ===
+    ws_a = wb.create_sheet("AppData缓存")
+    shdr(ws_a, ["软件", "类型", "大小", "能否删除", "建议"], [30, 22, 15, 12, 55])
+    known = {
+        "jianyingpro": ("剪映专业版", "视频缓存", "部分能", "剪映->设置->清缓存"),
+        "meituapp": ("美图", "图片缓存", "部分能", "美图->设置->清缓存"),
+        "meitu": ("美图", "图片缓存", "部分能", "美图->设置->清缓存"),
+        "wechat": ("微信开发者工具", "开发工具", "部分能", "工具->设置->清缓存"),
+        "kingsoft": ("WPS Office", "办公缓存", "部分能", "WPS->设置->清缓存"),
+        "doubao": ("豆包", "AI缓存", "部分能", "豆包->设置->清缓存"),
+        "microsoft": ("Microsoft", "系统组件", "不能", "系统相关不要动"),
+        "jetbrains": ("JetBrains IDE", "IDE缓存", "部分能", "File->Invalidate Caches"),
+        "feishu": ("飞书", "通讯缓存", "部分能", "飞书->设置->清缓存"),
+        "google": ("Google/Chrome", "浏览器", "部分能", "Chrome->设置->清数据"),
+        "qianniu": ("千牛", "卖家工具", "部分能", "千牛->设置->清缓存"),
+        "pip": ("pip缓存", "Python包", "能", "pip cache purge"),
+        "dingtalk": ("钉钉", "通讯缓存", "部分能", "钉钉->设置->清缓存"),
+        "openai": ("OpenAI", "AI工具", "部分能", "工具->设置->清缓存"),
+        "npm": ("npm缓存", "Node.js包", "能", "npm cache clean --force"),
+        "mozilla": ("Firefox", "浏览器", "部分能", "Firefox->设置->清数据"),
+    }
+    rows_a = []
+    for a in data["appdata"]:
+        kl = a["name"].lower()
+        mk = None
+        for k, (n, t, cd, act) in known.items():
+            if k in kl:
+                mk = (n, t, cd, act)
+                break
+        if mk:
+            rows_a.append([mk[0], mk[1], fmt(a["size"]), mk[2], mk[3]])
+        else:
+            rows_a.append([a["name"], "应用缓存", fmt(a["size"]), "部分能", "软件设置里清"])
+    for i, r in enumerate(rows_a, 2):
+        wr(ws_a, i, r, dc=4)
+    ws_a.auto_filter.ref = f"A1:E{len(rows_a)+1}"
+    ws_a.freeze_panes = "A2"
+
+
 
 
 def main():
