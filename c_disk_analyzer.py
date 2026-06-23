@@ -235,66 +235,6 @@ def gen_excel(data, path):
         pie.series[0].data_points.append(pt)
     ws_s.add_chart(pie, "D1")
 
-    # 清理建议
-    rs = len(cats) + 4
-    ws_s.merge_cells(f"A{rs}:B{rs}")
-    ws_s.cell(row=rs, column=1, value="C盘空间清理建议").font = tf
-
-    r = rs + 1
-    ws_s.merge_cells(f"A{r}:B{r}")
-    ws_s.cell(row=r, column=1, value="一、能马上清理的(安全)").font = stf
-    for i, (n, a) in enumerate([
-        ("npm缓存", "npm cache clean --force"),
-        ("pip缓存", "pip cache purge"),
-        ("临时文件", "Win+R->cleanmgr->C盘->清理系统文件")
-    ], r + 1):
-        ws_s.merge_cells(f"A{i}:B{i}")
-        ws_s.cell(row=i, column=1, value=f"  [{i-r}] {n}").font = gf
-        ws_s.merge_cells(f"C{i}:E{i}")
-        ws_s.cell(row=i, column=3, value=a).font = Font(name="微软雅黑", size=10)
-
-    r2 = r + 4
-    ws_s.merge_cells(f"A{r2}:B{r2}")
-    ws_s.cell(row=r2, column=1, value="二、需在软件内清理的缓存").font = stf
-    big = [a for a in data["appdata"] if a["size"] > 0.5e9][:8]
-    for i, a in enumerate(big, r2 + 1):
-        ws_s.merge_cells(f"A{i}:B{i}")
-        ws_s.cell(
-            row=i, column=1,
-            value=f"  [{i-r2}] {a['name']}({fmt(a['size'])})"
-        ).font = Font(name="微软雅黑", size=10, bold=True, color="ED7D31")
-        ws_s.merge_cells(f"C{i}:E{i}")
-        ws_s.cell(row=i, column=3, value="软件设置里清理").font = Font(
-            name="微软雅黑", size=10
-        )
-
-    r3 = r2 + len(big) + 2
-    ws_s.merge_cells(f"A{r3}:B{r3}")
-    ws_s.cell(row=r3, column=1, value="三、绝对不能碰的目录").font = stf
-    for i, item in enumerate([
-        "C:\\Windows系统核心",
-        "C:\\ProgramData程序数据",
-        "Program Files走设置卸载勿手动删",
-        "pagefile.sys虚拟内存自动管理"
-    ], r3 + 1):
-        ws_s.merge_cells(f"A{i}:E{i}")
-        ws_s.cell(row=i, column=1, value=f"  {item}").font = rf
-
-    r4 = r3 + 6
-    ws_s.merge_cells(f"A{r4}:B{r4}")
-    ws_s.cell(row=r4, column=1, value="四、日后注意事项").font = stf
-    for i, tip in enumerate([
-        "1. 剪映等视频软件做完后立即清理缓存",
-        "2. 大文件放到D盘或其他盘",
-        "3. 微信/钉钉关掉自动下载",
-        "4. 每月跑一次cleanmgr",
-        "5. 终极方案:换大容量SSD"
-    ], r4 + 1):
-        ws_s.merge_cells(f"A{i}:E{i}")
-        ws_s.cell(row=i, column=1, value=f"  {tip}").font = Font(
-            name="微软雅黑", size=10
-        )
-
     # === Sheet 2: C盘目录总览 ===
     ws_d = wb.create_sheet("C盘目录总览")
     shdr(ws_d, ["目录路径", "说明", "大小", "能否删除", "备注"], [50, 22, 14, 12, 55])
