@@ -381,20 +381,30 @@ def main():
     except Exception as e:
         print(f"\n生成 Excel 失败: {e}")
 
+    # 处理双击运行无 stdin 的情况
+    def safe_input(prompt):
+        try:
+            return input(prompt).strip().lower()
+        except (RuntimeError, EOFError):
+            return "n"
+
     print("\n是否清理以下缓存?")
-    r = input("  清理 npm 缓存? (y/n): ").strip().lower()
+    r = safe_input("  清理 npm 缓存? (y/n): ")
     if r == "y":
         subprocess.run(["npm", "cache", "clean", "--force"],
                        capture_output=True, timeout=30)
         print("  npm 缓存已清理")
-    r = input("  清理 pip 缓存? (y/n): ").strip().lower()
+    r = safe_input("  清理 pip 缓存? (y/n): ")
     if r == "y":
         subprocess.run([sys.executable, "-m", "pip", "cache", "purge"],
                        capture_output=True, timeout=30)
         print("  pip 缓存已清理")
 
-    print("\n完成! 按 Enter 退出...")
-    input()
+    print("\n完成!")
+    try:
+        input("按 Enter 退出...")
+    except (RuntimeError, EOFError):
+        pass
 
 
 if __name__ == "__main__":
